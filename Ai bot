@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Asisten Semua Orang</title>
+    <!-- Lucide Icons untuk tombol audio yang modern -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Gaya CSS Gabungan Sesuai Permintaan Anda */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            transition: background-color 0.3s ease;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 500px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            height: 85vh; /* Menjaga agar container proporsional di layar */
+        }
+
+        h2 {
+            background: #007bff;
+            color: white;
+            margin: 0;
+            padding: 15px;
+            text-align: center;
+            font-size: 1.25rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .chat-box {
+            flex: 1; /* Membuat area chat mengambil ruang sisa secara dinamis */
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background-color: #f9fbfd;
+            scroll-behavior: smooth;
+        }
+
+        .user-msg, .bot-msg {
+            padding: 10px 15px;
+            border-radius: 8px;
+            max-width: 80%;
+            word-wrap: break-word;
+            line-height: 1.4;
+            font-size: 14.5px;
+        }
+
+        .user-msg {
+            background: #007bff;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 2px;
+        }
+
+        .bot-msg {
+            background: #e9ecef;
+            color: #333;
+            align-self: flex-start;
+            border-bottom-left-radius: 2px;
+        }
+
+        .input-area {
+            display: flex;
+            border-top: 1px solid #ddd;
+            padding: 10px;
+            background: white;
+        }
+
+        input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            outline: none;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        input:focus {
+            border-color: #007bff;
+        }
+
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            margin-left: 5px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        /* Gaya Khusus untuk Kontrol Putar Suara di dalam Bot Message */
+        .tts-button {
+            background: transparent;
+            color: #007bff;
+            border: none;
+            padding: 2px 6px;
+            margin-left: 5px;
+            cursor: pointer;
+            font-size: 11px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            border-radius: 4px;
+        }
+
+        .tts-button:hover {
+            background: rgba(0, 123, 255, 0.1);
+        }
+
+        /* Responsivitas pada Layar Ponsel */
+        @media (max-width: 600px) {
+            body {
+                height: 100vh;
+                background-color: white;
+            }
+            .chat-container {
+                width: 100%;
+                height: 100vh;
+                border-radius: 0;
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <h2>🤖 AI Asisten Publik</h2>
+        
+        <div class="chat-box" id="chatBox">
+            <div class="bot-msg">
+                Halo! Ada yang bisa saya bantu hari ini?
+                <button class="tts-button" onclick="speakText(this, 'Halo! Ada yang bisa saya bantu hari ini?')">
+                    <i data-lucide="volume-2" style="width: 14px; height: 14px;"></i> Dengarkan
+                </button>
+            </div>
+        </div>
+        
+        <div class="input-area">
+            <input type="text" id="userInput" placeholder="Tanyakan sesuatu pada AI..." onkeydown="handleKeyDown(event)">
+            <button onclick="sendMessage()">Kirim</button>
+        </div>
+    </div>
+
+    <!-- Elemen Audio Tersembunyi untuk TTS -->
+    <audio id="ttsAudio" style="display: none;"></audio>
+
+    <script>
+        // API Key Gemini diinisialisasi kosong (Platform menyediakannya saat runtime)
+        const apiKey = ""; 
+
+        // Inisialisasi ikon Lucide agar tampil cantik
+        window.addEventListener('load', () => {
+            if (window.lucide) {
+                lucide.createIcons();
+            }
+        });
+
+        // Deteksi tombol Enter pada kolom input
+        function handleKeyDown(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        // FUNGSI UTAMA: Mengirim pesan, memunculkan indikator berdasar struktur Anda, dan memproses API
+        async function sendMessage() {
+            const inputElement = document.getElementById("userInput");
+            const chatBox = document.getElementById("chatBox");
+            const userText = inputElement.value.trim();
+
+            if (userText === "") return;
+
+            // Tampilkan pesan user di layar
+            chatBox.innerHTML += `<div class="user-msg">${escapeHtml(userText)}</div>`;
+            inputElement.value = "";
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            // Tampilkan status "Mengetik/Memikirkan..." sesuai logika Anda
+            const typingIndicator = document.createElement("div");
+            typingIndicator.className = "bot-msg";
+            typingIndicator.innerText = "Memikirkan jawaban...";
+            chatBox.appendChild(typingIndicator);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            try {
+                // Endpoint API Gemini 2.5 Flash yang super cepat
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+                
+                // Melakukan panggilan API dengan penanganan eksponensial backoff terintegrasi
+                const response = await fetchWithRetry(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: userText }] }],
+                        systemInstruction: {
+                            parts: [{ text: "Kamu adalah AI Asisten Publik yang ramah, sopan, membantu, dan fasih berbicara bahasa Indonesia." }]
+                        }
+                    })
+                });
+
+                const data = await response.json();
+                
+                // Hapus indikator mengetik sesuai dengan perintah logika Anda
+                chatBox.removeChild(typingIndicator);
+                
+                const aiReply = data.candidates?.[0]?.content?.parts?.[0]?.text || "Maaf, saya sedang lelah. Coba lagi nanti ya!";
+                const safeCleanReply = aiReply.replace(/'/g, "\\'").replace(/\n/g, " ");
+
+                // Menambahkan bubble chat bot dengan fitur text-to-speech tambahan yang elegan
+                const botMessageElement = document.createElement("div");
+                botMessageElement.className = "bot-msg";
+                botMessageElement.innerHTML = `
+                    <div>${parseSimpleMarkdown(aiReply)}</div>
+                    <button class="tts-button" onclick="speakText(this, '${safeCleanReply}')">
+                        <i data-lucide="volume-2" style="width: 14px; height: 14px;"></i> Dengarkan
+                    </button>
+                `;
+                
+                chatBox.appendChild(botMessageElement);
+                if (window.lucide) lucide.createIcons();
+                
+            } catch (error) {
+                console.error("Kesalahan API: ", error);
+                if (chatBox.contains(typingIndicator)) {
+                    chatBox.removeChild(typingIndicator);
+                }
+                chatBox.innerHTML += `<div class="bot-msg">Gagal terhubung ke AI. Periksa koneksi internet Anda atau coba lagi nanti.</div>`;
+            }
+
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        // Fungsi Eksponensial Backoff untuk ketahanan koneksi API (Maksimum 5 kali percobaan)
+        async function fetchWithRetry(url, options, maxRetries = 5) {
+            let delay = 1000;
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.ok) return response;
+                    
+                    // Lakukan retry jika terkena pembatasan laju (Rate Limit / Status 429) atau server error (5xx)
+                    if (response.status === 429 || response.status >= 500) {
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        delay *= 2;
+                        continue;
+                    }
+                    return response;
+                } catch (error) {
+                    if (i === maxRetries - 1) throw error;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2;
+                }
+            }
+            throw new Error("Koneksi gagal setelah beberapa kali percobaan.");
+        }
+
+        // Fungsi Pembaca Teks (Text-to-Speech) menggunakan Gemini TTS premium
+        async function speakText(buttonElement, rawText) {
+            const ttsAudio = document.getElementById('ttsAudio');
+            const originalHtml = buttonElement.innerHTML;
+            
+            // Tampilkan ikon loading saat audio sedang dipersiapkan
+            buttonElement.innerHTML = `<i data-lucide="loader-2" style="width: 14px; height: 14px;" class="animate-spin"></i> Membaca...`;
+            if (window.lucide) lucide.createIcons();
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
+            const cleanText = rawText.replace(/[*#`_]/g, ''); // Membersihkan karakter markdown
+
+            const payload = {
+                contents: [{ parts: [{ text: `Katakan secara natural dalam bahasa Indonesia: ${cleanText}` }] }],
+                generationConfig: {
+                    responseModalities: ["AUDIO"],
+                    speechConfig: {
+                        voiceConfig: {
+                            prebuiltVoiceConfig: {
+                                voiceName: "Kore" // Suara default yang jernih dan ramah
+                            }
+                        }
+                    }
+                },
+                model: "gemini-2.5-flash-preview-tts"
+            };
+
+            try {
+                const response = await fetchWithRetry(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error("Gagal mengambil audio");
+
+                const result = await response.json();
+                const pcmBase64 = result.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+
+                if (pcmBase64) {
+                    // Konversi string biner dari base64
+                    const pcmBinaryString = window.atob(pcmBase64);
+                    const pcmLength = pcmBinaryString.length;
+                    const pcmBytes = new Uint8Array(pcmLength);
+                    for (let i = 0; i < pcmLength; i++) {
+                        pcmBytes[i] = pcmBinaryString.charCodeAt(i);
+                    }
+
+                    // Ubah PCM mentah ke file WAV agar dapat diputar oleh tag <audio> standard (24000Hz)
+                    const wavBlob = pcmToWav(pcmBytes, 24000);
+                    const audioUrl = URL.createObjectURL(wavBlob);
+                    
+                    ttsAudio.src = audioUrl;
+                    ttsAudio.play();
+                }
+            } catch (err) {
+                console.error("Gagal menjalankan TTS: ", err);
+            } finally {
+                // Kembalikan status tombol ke keadaan awal
+                buttonElement.innerHTML = originalHtml;
+                if (window.lucide) lucide.createIcons();
+            }
+        }
+
+        // Helper: Pembuatan file biner WAV dari PCM mentah
+        function pcmToWav(pcmData, sampleRate) {
+            const buffer = new ArrayBuffer(44 + pcmData.length);
+            const view = new DataView(buffer);
+            
+            view.setUint32(0, 0x52494646, false); // "RIFF"
+            view.setUint32(4, 36 + pcmData.length, true); // Ukuran berkas total - 8
+            view.setUint32(8, 0x57415645, false); // "WAVE"
+            view.setUint32(12, 0x666d7420, false); // "fmt " chunk
+            view.setUint32(16, 16, true); // Ukuran chunk fmt (16)
+            view.setUint16(20, 1, true); // Audio format linear PCM (1)
+            view.setUint16(22, 1, true); // Saluran tunggal Mono (1)
+            view.setUint32(24, sampleRate, true); // Frekuensi sampling
+            view.setUint32(28, sampleRate * 2, true); // Byte rate
+            view.setUint16(32, 2, true); // Block align
+            view.setUint16(34, 16, true); // Kedalaman bit (16 bit)
+            view.setUint32(36, 0x64617461, false); // "data" chunk
+            view.setUint32(40, pcmData.length, true); // Ukuran data audio
+            
+            for (let i = 0; i < pcmData.length; i++) {
+                view.setUint8(44 + i, pcmData[i]);
+            }
+            return new Blob([buffer], { type: 'audio/wav' });
+        }
+
+        // Helper: Amankan teks HTML dari script jahat atau karakter bentrok
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Helper: Format dasar cetak Markdown agar tebal (*) atau baris baru (\n) tampil rapi
+        function parseSimpleMarkdown(text) {
+            if (!text) return '';
+            let formatted = escapeHtml(text);
+            formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
+            formatted = formatted.replace(/\n/g, '<br>');
+            return formatted;
+        }
+    </script>
+</body>
+</html>
